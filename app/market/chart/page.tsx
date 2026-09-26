@@ -63,147 +63,171 @@ interface Prediction {
   calibration: string
 }
 
-interface AnalystAnalysis {
-  marketSummary: string
-  technicalSummary: string
-  modelSummary: string
-  uncertainty: string
-  keyFactors: string[]
+interface AnalystDetail {
+  marketState: string
+  trendState: string
+  momentumState: string
+  volatilityState: string
+  rsiState: string
+  macdState: string
+  bollingerState: string
+  mlState: string
+  confluence: string[]
   riskFactors: string[]
-  analystConclusion: string
+  uncertainty: string
+  summary: string
 }
 
 interface AnalystResponse {
   success: boolean
-  version: string
+  mode: string
   source: string
-  liveAI: boolean
-  providerStatus: string
-  contextVersion: string
-  symbol: string
-  assetType: string
-  timeframe: string
-  horizon: number
-  market: {
-    close: number
-    returnPercent: number
-    timestamp: string
+  generatedAt: string
+  marketSummary: string
+  technicalSummary: string
+  predictionSummary: string
+  keyFactors: string[]
+  riskFactors: string[]
+  uncertainty: string
+  conclusion: string
+  analyst: AnalystDetail
+  context: {
+    market: {
+      close: number
+      returnPercent: number | null
+      latestTimestamp: string
+    }
+    technical: Record<string, number | null>
+    prediction: Prediction
   }
-  prediction: Prediction
-  analysis: AnalystAnalysis
   error?: string
 }
 
 const LIMIT_OPTIONS = [50, 100, 180]
 
+function stateLabel(value: string) {
+  return value.replaceAll("_", " ")
+}
+
+function stateClass(value: string) {
+  if (
+    value.includes("BULLISH") ||
+    value.includes("POSITIVE") ||
+    value === "POSITIVE"
+  ) {
+    return "border-green-200 bg-green-50 text-green-800"
+  }
+
+  if (
+    value.includes("BEARISH") ||
+    value.includes("NEGATIVE") ||
+    value === "NEGATIVE"
+  ) {
+    return "border-red-200 bg-red-50 text-red-800"
+  }
+
+  if (
+    value.includes("HIGH") ||
+    value.includes("RISK")
+  ) {
+    return "border-amber-200 bg-amber-50 text-amber-800"
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-800"
+}
+
+function predictionClass(prediction: Prediction["prediction"]) {
+  if (prediction === "UP") {
+    return "border-green-200 bg-green-50 text-green-800"
+  }
+
+  if (prediction === "DOWN") {
+    return "border-red-200 bg-red-50 text-red-800"
+  }
+
+  return "border-gray-200 bg-gray-50 text-gray-800"
+}
+
 export default function MarketChartPage() {
-  const [candles, setCandles] =
-    useState<Candle[]>([])
+  const [candles, setCandles] = useState<Candle[]>([])
+  const [features, setFeatures] = useState<Feature[]>([])
+  const [limit, setLimit] = useState(180)
 
-  const [features, setFeatures] =
-    useState<Feature[]>([])
+  const [loading, setLoading] = useState(true)
+  const [featuresLoading, setFeaturesLoading] = useState(true)
 
-  const [limit, setLimit] =
-    useState(180)
+  const [error, setError] = useState<string | null>(null)
+  const [featuresError, setFeaturesError] = useState<string | null>(null)
 
-  const [loading, setLoading] =
-    useState(true)
+  const [analystLoading, setAnalystLoading] = useState(false)
+  const [analystError, setAnalystError] = useState<string | null>(null)
+  const [analyst, setAnalyst] = useState<AnalystResponse | null>(null)
 
-  const [featuresLoading, setFeaturesLoading] =
-    useState(true)
+  const loadHistoricalData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-  const [error, setError] =
-    useState<string | null>(null)
-
-  const [featuresError, setFeaturesError] =
-    useState<string | null>(null)
-
-  const [analystLoading, setAnalystLoading] =
-    useState(false)
-
-  const [analystError, setAnalystError] =
-    useState<string | null>(null)
-
-  const [analyst, setAnalyst] =
-    useState<AnalystResponse | null>(null)
-
-  const loadHistoricalData =
-    useCallback(async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const response =
-          await fetch(
-            `/api/market/historical/data?symbol=BTC&assetType=crypto&timeframe=4h&limit=${limit}`,
-            {
-              cache: "no-store",
-            }
-          )
-
-        const result =
-          (await response.json()) as HistoricalResponse
-
-        if (
-          !response.ok ||
-          !result.success
-        ) {
-          throw new Error(
-            result.error ??
-              "Failed to load historical data"
-          )
+      const response = await fetch(
+        `/api/market/historical/data?symbol=BTC&assetType=crypto&timeframe=4h&limit=${limit}`,
+        {
+          cache: "no-store",
         }
+      )
 
-        setCandles(result.candles)
-      } catch (error) {
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Unknown error"
+      const result =
+        (await response.json()) as HistoricalResponse
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error ?? "Failed to load historical data"
         )
-      } finally {
-        setLoading(false)
       }
-    }, [limit])
 
-  const loadFeatures =
-    useCallback(async () => {
-      try {
-        setFeaturesLoading(true)
-        setFeaturesError(null)
+      setCandles(result.candles)
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unknown error"
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [limit])
 
-        const response =
-          await fetch(
-            "/api/market/features?symbol=BTC&assetType=crypto&timeframe=4h",
-            {
-              cache: "no-store",
-            }
-          )
+  const loadFeatures = useCallback(async () => {
+    try {
+      setFeaturesLoading(true)
+      setFeaturesError(null)
 
-        const result =
-          (await response.json()) as FeatureResponse
-
-        if (
-          !response.ok ||
-          !result.success
-        ) {
-          throw new Error(
-            result.error ??
-              "Failed to load market features"
-          )
+      const response = await fetch(
+        "/api/market/features?symbol=BTC&assetType=crypto&timeframe=4h",
+        {
+          cache: "no-store",
         }
+      )
 
-        setFeatures(result.features)
-      } catch (error) {
-        setFeaturesError(
-          error instanceof Error
-            ? error.message
-            : "Unknown feature error"
+      const result =
+        (await response.json()) as FeatureResponse
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error ?? "Failed to load market features"
         )
-      } finally {
-        setFeaturesLoading(false)
       }
-    }, [])
+
+      setFeatures(result.features)
+    } catch (error) {
+      setFeaturesError(
+        error instanceof Error
+          ? error.message
+          : "Unknown feature error"
+      )
+    } finally {
+      setFeaturesLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     loadHistoricalData()
@@ -218,24 +242,19 @@ export default function MarketChartPage() {
       setAnalystLoading(true)
       setAnalystError(null)
 
-      const response =
-        await fetch(
-          "/api/market/intelligence/demo?symbol=BTC&assetType=crypto&timeframe=4h&horizon=6",
-          {
-            cache: "no-store",
-          }
-        )
+      const response = await fetch(
+        "/api/market/intelligence/demo?symbol=BTC&assetType=crypto&timeframe=4h&horizon=6",
+        {
+          cache: "no-store",
+        }
+      )
 
       const result =
         (await response.json()) as AnalystResponse
 
-      if (
-        !response.ok ||
-        !result.success
-      ) {
+      if (!response.ok || !result.success) {
         throw new Error(
-          result.error ??
-            "Failed to run Market Analyst"
+          result.error ?? "Failed to run Market Analyst"
         )
       }
 
@@ -281,45 +300,36 @@ export default function MarketChartPage() {
                 Candles
               </div>
 
-              {LIMIT_OPTIONS.map(
-                (option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() =>
-                      setLimit(option)
-                    }
-                    disabled={loading}
-                    className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-                      limit === option
-                        ? "border-gray-900 bg-gray-900 text-white"
-                        : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
-                    } disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    {option}
-                  </button>
-                )
-              )}
+              {LIMIT_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setLimit(option)}
+                  disabled={loading}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+                    limit === option
+                      ? "border-gray-900 bg-gray-900 text-white"
+                      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  {option}
+                </button>
+              ))}
 
               <button
                 type="button"
-                onClick={
-                  loadHistoricalData
-                }
+                onClick={loadHistoricalData}
                 disabled={loading}
                 className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading
-                  ? "Loading..."
-                  : "Reload"}
+                {loading ? "Loading..." : "Reload"}
               </button>
             </div>
           </div>
 
           <div className="mb-4 flex items-center justify-between">
             <div className="text-sm text-gray-500">
-              Data source: Supabase historical
-              database
+              Data source: Supabase historical database
             </div>
 
             <div className="text-sm text-gray-500">
@@ -338,9 +348,7 @@ export default function MarketChartPage() {
               Loading historical candles...
             </div>
           ) : candles.length > 0 ? (
-            <CandlestickChart
-              candles={candles}
-            />
+            <CandlestickChart candles={candles} />
           ) : (
             <div className="flex h-[500px] items-center justify-center text-gray-500">
               No historical candles found.
@@ -358,9 +366,7 @@ export default function MarketChartPage() {
               Loading technical indicators...
             </div>
           ) : features.length > 0 ? (
-            <MarketIndicators
-              features={features}
-            />
+            <MarketIndicators features={features} />
           ) : null}
 
           <div className="mt-8 border-t border-gray-200 pt-6">
@@ -371,9 +377,8 @@ export default function MarketChartPage() {
                 </div>
 
                 <div className="text-sm text-gray-500">
-                  V5.2 Demo Analyst - menggunakan
-                  V5.1 Intelligence Context dan ML
-                  Prediction
+                  V5.4 Deterministic Analyst - Technical
+                  Intelligence + ML Prediction
                 </div>
               </div>
 
@@ -385,7 +390,7 @@ export default function MarketChartPage() {
               >
                 {analystLoading
                   ? "Analyzing..."
-                  : "AI MARKET ANALYST"}
+                  : "RUN MARKET ANALYST"}
               </button>
             </div>
 
@@ -409,11 +414,9 @@ export default function MarketChartPage() {
                   </div>
 
                   <p className="mt-1 text-sm text-amber-800">
-                    Analisis ini menggunakan data
-                    MarketX V5.1 dan output ML yang
-                    sudah tersedia. OpenAI live akan
-                    diaktifkan setelah API credit
-                    tersedia.
+                    Analyst menggunakan technical features
+                    MarketX dan output ML. Tidak ada LLM yang
+                    digunakan pada mode ini.
                   </p>
                 </div>
 
@@ -424,7 +427,7 @@ export default function MarketChartPage() {
                     </div>
 
                     <p className="text-sm leading-6 text-gray-800">
-                      {analyst.analysis.marketSummary}
+                      {analyst.marketSummary}
                     </p>
                   </div>
 
@@ -434,7 +437,7 @@ export default function MarketChartPage() {
                     </div>
 
                     <p className="text-sm leading-6 text-gray-800">
-                      {analyst.analysis.technicalSummary}
+                      {analyst.technicalSummary}
                     </p>
                   </div>
                 </div>
@@ -446,20 +449,31 @@ export default function MarketChartPage() {
                         ML PREDICTION
                       </div>
 
-                      <div className="mt-1 text-2xl font-bold text-gray-900">
-                        {analyst.prediction.prediction}
+                      <div
+                        className={`mt-2 inline-flex rounded-lg border px-3 py-1.5 text-xl font-bold ${predictionClass(
+                          analyst.analyst.mlState === "ML_BULLISH"
+                            ? "UP"
+                            : analyst.analyst.mlState === "ML_BEARISH"
+                              ? "DOWN"
+                              : "NEUTRAL"
+                        )}`}
+                      >
+                        {analyst.context.prediction.prediction}
                       </div>
                     </div>
 
                     <div className="text-right text-xs text-gray-500">
                       <div>
-                        Model:{" "}
-                        {analyst.prediction.model}
+                        Model: {analyst.context.prediction.model}
                       </div>
 
                       <div>
                         Calibration:{" "}
-                        {analyst.prediction.calibration}
+                        {analyst.context.prediction.calibration}
+                      </div>
+
+                      <div className="mt-1">
+                        Horizon: 6 candles
                       </div>
                     </div>
                   </div>
@@ -467,37 +481,83 @@ export default function MarketChartPage() {
                   <div className="grid gap-3 sm:grid-cols-3">
                     {(
                       [
-                        ["DOWN", analyst.prediction.probabilities.DOWN],
-                        ["NEUTRAL", analyst.prediction.probabilities.NEUTRAL],
-                        ["UP", analyst.prediction.probabilities.UP],
+                        [
+                          "DOWN",
+                          analyst.context.prediction.probabilities.DOWN,
+                        ],
+                        [
+                          "NEUTRAL",
+                          analyst.context.prediction.probabilities.NEUTRAL,
+                        ],
+                        [
+                          "UP",
+                          analyst.context.prediction.probabilities.UP,
+                        ],
                       ] as const
-                    ).map(
-                      ([label, value]) => (
-                        <div
-                          key={label}
-                          className="rounded-xl border border-gray-200 bg-gray-50 p-4"
-                        >
-                          <div className="text-xs font-semibold text-gray-500">
-                            {label}
-                          </div>
-
-                          <div className="mt-1 text-xl font-bold text-gray-900">
-                            {(value * 100).toFixed(2)}%
-                          </div>
+                    ).map(([label, value]) => (
+                      <div
+                        key={label}
+                        className={`rounded-xl border p-4 ${
+                          label ===
+                          analyst.context.prediction.prediction
+                            ? "border-gray-900 bg-gray-100"
+                            : "border-gray-200 bg-gray-50"
+                        }`}
+                      >
+                        <div className="text-xs font-semibold text-gray-500">
+                          {label}
                         </div>
-                      )
-                    )}
+
+                        <div className="mt-1 text-xl font-bold text-gray-900">
+                          {(value * 100).toFixed(2)}%
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-3 text-sm font-semibold text-gray-500">
+                    TECHNICAL STATE
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      ["Trend", analyst.analyst.trendState],
+                      ["Momentum", analyst.analyst.momentumState],
+                      ["RSI", analyst.analyst.rsiState],
+                      ["MACD", analyst.analyst.macdState],
+                      ["Bollinger", analyst.analyst.bollingerState],
+                      ["Volatility", analyst.analyst.volatilityState],
+                      ["Market", analyst.analyst.marketState],
+                      ["ML State", analyst.analyst.mlState],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        className={`rounded-xl border p-4 ${stateClass(
+                          value
+                        )}`}
+                      >
+                        <div className="text-xs font-semibold opacity-70">
+                          {label}
+                        </div>
+
+                        <div className="mt-1 text-sm font-bold">
+                          {stateLabel(value)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-xl border border-gray-200 bg-white p-5">
                     <div className="mb-3 text-sm font-semibold text-gray-500">
-                      KEY FACTORS
+                      CONFLUENCE
                     </div>
 
                     <ul className="space-y-2 text-sm text-gray-800">
-                      {analyst.analysis.keyFactors.map(
+                      {analyst.analyst.confluence.map(
                         (factor, index) => (
                           <li
                             key={index}
@@ -517,7 +577,7 @@ export default function MarketChartPage() {
                     </div>
 
                     <ul className="space-y-2 text-sm text-gray-800">
-                      {analyst.analysis.riskFactors.map(
+                      {analyst.analyst.riskFactors.map(
                         (factor, index) => (
                           <li
                             key={index}
@@ -532,14 +592,30 @@ export default function MarketChartPage() {
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
-                  <div className="mb-2 text-sm font-semibold text-gray-500">
-                    UNCERTAINTY
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                    <div className="mb-2 text-sm font-semibold text-gray-500">
+                      UNCERTAINTY
+                    </div>
+
+                    <div
+                      className={`inline-flex rounded-lg border px-3 py-1.5 text-sm font-bold ${stateClass(
+                        analyst.uncertainty
+                      )}`}
+                    >
+                      {stateLabel(analyst.uncertainty)}
+                    </div>
                   </div>
 
-                  <p className="text-sm leading-6 text-gray-800">
-                    {analyst.analysis.uncertainty}
-                  </p>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                    <div className="mb-2 text-sm font-semibold text-gray-500">
+                      ANALYST SUMMARY
+                    </div>
+
+                    <p className="text-sm leading-6 text-gray-800">
+                      {analyst.analyst.summary}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-gray-900 bg-gray-900 p-5 text-white">
@@ -548,8 +624,12 @@ export default function MarketChartPage() {
                   </div>
 
                   <p className="text-sm leading-6 text-gray-100">
-                    {analyst.analysis.analystConclusion}
+                    {analyst.conclusion}
                   </p>
+                </div>
+
+                <div className="text-xs text-gray-400">
+                  Generated: {analyst.generatedAt}
                 </div>
               </div>
             )}

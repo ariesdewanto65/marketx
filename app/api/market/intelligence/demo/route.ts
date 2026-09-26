@@ -1,189 +1,285 @@
-﻿import { NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
+import { analyzeMarket } from "@/lib/market/analyst-engine"
+import type { MarketFeature } from "@/types/feature"
+import type {
+  CandleAssetType,
+  MarketTimeframe,
+} from "@/types/candle"
+import type { PredictionDirection } from "@/types/prediction"
 
-export async function GET(request: Request) {
+export const dynamic = "force-dynamic"
+
+export async function GET(request: NextRequest) {
   try {
-    const url = new URL(request.url)
+    const searchParams = request.nextUrl.searchParams
 
-    const symbol =
-      url.searchParams.get("symbol")?.toUpperCase() ?? "BTC"
+    const symbol = searchParams.get("symbol") ?? "BTC"
 
-    const assetType =
-      url.searchParams.get("assetType") ?? "crypto"
+    const rawAssetType =
+      searchParams.get("assetType") ?? "crypto"
 
-    const timeframe =
-      url.searchParams.get("timeframe") ?? "4h"
+    const rawTimeframe =
+      searchParams.get("timeframe") ?? "4h"
 
-    const horizon =
-      url.searchParams.get("horizon") ?? "6"
-
-    const contextUrl = new URL(
-      "/api/market/intelligence/context",
-      request.url
-    )
-
-    contextUrl.searchParams.set("symbol", symbol)
-    contextUrl.searchParams.set("assetType", assetType)
-    contextUrl.searchParams.set("timeframe", timeframe)
-    contextUrl.searchParams.set("horizon", horizon)
-
-    const response = await fetch(contextUrl, {
-      cache: "no-store",
-    })
-
-    const data = await response.json()
-
-    if (!response.ok || !data.success) {
+    if (
+      rawAssetType !== "stock" &&
+      rawAssetType !== "crypto"
+    ) {
       return NextResponse.json(
         {
           success: false,
-          error: "Market intelligence context failed",
-          detail: data,
+          error:
+            "Invalid assetType. Use stock or crypto.",
+        },
+        { status: 400 }
+      )
+    }
+
+    if (
+      rawTimeframe !== "1d" &&
+      rawTimeframe !== "4h"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Invalid timeframe. Use 1d or 4h.",
+        },
+        { status: 400 }
+      )
+    }
+
+    const assetType: CandleAssetType = rawAssetType
+    const timeframe: MarketTimeframe = rawTimeframe
+
+    if (
+      (assetType === "stock" && timeframe !== "1d") ||
+      (assetType === "crypto" && timeframe !== "4h")
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Invalid assetType/timeframe combination.",
+        },
+        { status: 400 }
+      )
+    }
+
+    const contextUrl =
+      `${request.nextUrl.origin}/api/market/intelligence/context` +
+      `?symbol=${encodeURIComponent(symbol)}` +
+      `&assetType=${encodeURIComponent(assetType)}` +
+      `&timeframe=${encodeURIComponent(timeframe)}`
+
+    const contextResponse = await fetch(contextUrl, {
+      cache: "no-store",
+    })
+
+    if (!contextResponse.ok) {
+      const errorText = await contextResponse.text()
+
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Failed to load market intelligence context.",
+          details: errorText,
         },
         { status: 502 }
       )
     }
 
-    const context = data.context
-    const technical = context.technical
-    const prediction = context.prediction
-    const market = context.market
+    const contextData = await contextResponse.json()
 
-    const rsi = Number(technical.rsi14)
-    const macd = Number(technical.macd)
-    const macdSignal = Number(technical.macdSignal)
-    const momentum = Number(technical.momentum14)
-    const volatility = Number(technical.volatility20)
-
-    const probabilityGap =
-      Math.max(
-        Number(prediction.probabilities.DOWN ?? 0),
-        Number(prediction.probabilities.NEUTRAL ?? 0),
-        Number(prediction.probabilities.UP ?? 0)
-      ) -
-      Math.min(
-        Number(prediction.probabilities.DOWN ?? 0),
-        Number(prediction.probabilities.NEUTRAL ?? 0),
-        Number(prediction.probabilities.UP ?? 0)
-      )
-
-    const keyFactors: string[] = []
-    const riskFactors: string[] = []
-
-    if (rsi < 30) {
-      keyFactors.push(
-        "RSI14 berada di bawah 30, menunjukkan kondisi oversold secara teknikal."
-      )
-    } else if (rsi < 40) {
-      keyFactors.push(
-        `RSI14 berada di ${rsi.toFixed(2)}, menunjukkan momentum relatif lemah.`
-      )
-    } else if (rsi > 70) {
-      keyFactors.push(
-        "RSI14 berada di atas 70, menunjukkan kondisi overbought secara teknikal."
-      )
-    } else {
-      keyFactors.push(
-        `RSI14 berada di ${rsi.toFixed(2)}, masih berada di area non-ekstrem.`
+    if (!contextData.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Market intelligence context returned an unsuccessful response.",
+        },
+        { status: 502 }
       )
     }
 
-    if (macd < macdSignal) {
-      keyFactors.push(
-        "MACD berada di bawah signal line, sehingga momentum MACD saat ini cenderung negatif."
-      )
-    } else {
-      keyFactors.push(
-        "MACD berada di atas signal line, sehingga momentum MACD saat ini cenderung positif."
-      )
+    const market = contextData.context.market
+    const technical = contextData.context.technical
+    const prediction = contextData.context.prediction
+
+    const feature: MarketFeature = {
+      assetType,
+      symbol,
+      timeframe,
+      timestamp: market.latestTimestamp,
+
+      open: Number(market.open),
+      high: Number(market.high),
+      low: Number(market.low),
+      close: Number(market.close),
+
+      volume:
+        market.volume === null ||
+        market.volume === undefined
+          ? null
+          : Number(market.volume),
+
+      returnPercent:
+        technical.returnPercent === null ||
+        technical.returnPercent === undefined
+          ? null
+          : Number(technical.returnPercent),
+
+      sma20:
+        technical.sma20 === null ||
+        technical.sma20 === undefined
+          ? null
+          : Number(technical.sma20),
+
+      ema20:
+        technical.ema20 === null ||
+        technical.ema20 === undefined
+          ? null
+          : Number(technical.ema20),
+
+      momentum14:
+        technical.momentum14 === null ||
+        technical.momentum14 === undefined
+          ? null
+          : Number(technical.momentum14),
+
+      volatility20:
+        technical.volatility20 === null ||
+        technical.volatility20 === undefined
+          ? null
+          : Number(technical.volatility20),
+
+      rsi14:
+        technical.rsi14 === null ||
+        technical.rsi14 === undefined
+          ? null
+          : Number(technical.rsi14),
+
+      macd:
+        technical.macd === null ||
+        technical.macd === undefined
+          ? null
+          : Number(technical.macd),
+
+      macdSignal:
+        technical.macdSignal === null ||
+        technical.macdSignal === undefined
+          ? null
+          : Number(technical.macdSignal),
+
+      macdHistogram:
+        technical.macdHistogram === null ||
+        technical.macdHistogram === undefined
+          ? null
+          : Number(technical.macdHistogram),
+
+      atr14:
+        technical.atr14 === null ||
+        technical.atr14 === undefined
+          ? null
+          : Number(technical.atr14),
+
+      bollingerMiddle20:
+        technical.bollingerMiddle20 === null ||
+        technical.bollingerMiddle20 === undefined
+          ? null
+          : Number(technical.bollingerMiddle20),
+
+      bollingerUpper20:
+        technical.bollingerUpper20 === null ||
+        technical.bollingerUpper20 === undefined
+          ? null
+          : Number(technical.bollingerUpper20),
+
+      bollingerLower20:
+        technical.bollingerLower20 === null ||
+        technical.bollingerLower20 === undefined
+          ? null
+          : Number(technical.bollingerLower20),
+
+      bollingerWidth20:
+        technical.bollingerWidth20 === null ||
+        technical.bollingerWidth20 === undefined
+          ? null
+          : Number(technical.bollingerWidth20),
     }
 
-    if (momentum < 0) {
-      keyFactors.push(
-        `Momentum14 bernilai ${momentum.toFixed(2)}, menunjukkan perubahan harga historis yang masih negatif pada window indikator.`
-      )
-    } else {
-      keyFactors.push(
-        `Momentum14 bernilai ${momentum.toFixed(2)}, menunjukkan perubahan harga historis yang positif pada window indikator.`
-      )
+    const direction =
+      prediction.prediction as PredictionDirection
+
+    const probabilities = {
+      DOWN: Number(prediction.probabilities.DOWN),
+      NEUTRAL: Number(
+        prediction.probabilities.NEUTRAL
+      ),
+      UP: Number(prediction.probabilities.UP),
     }
 
-    if (volatility > 0.02) {
-      riskFactors.push(
-        `Volatilitas20 relatif tinggi pada ${volatility.toFixed(4)}.`
-      )
-    } else {
-      riskFactors.push(
-        `Volatilitas20 tercatat ${volatility.toFixed(4)}.`
-      )
-    }
+    const analyst = analyzeMarket({
+      market: feature,
+      prediction: {
+        prediction: direction,
+        probabilities,
+        model: String(prediction.model),
+        calibration: String(prediction.calibration),
+      },
+    })
 
-    if (probabilityGap < 0.10) {
-      riskFactors.push(
-        "Probabilitas model berdekatan sehingga pemisahan antar kelas relatif lemah."
-      )
-    } else {
-      riskFactors.push(
-        "Probabilitas model menunjukkan pemisahan antar kelas yang lebih jelas."
-      )
-    }
+    const returnPercent = Number(
+      feature.returnPercent
+    )
 
-    const returnPercent = Number(technical.returnPercent)
-
-    const marketReturnText = Number.isFinite(returnPercent)
-      ? `${returnPercent.toFixed(2)}%`
-      : "data tidak tersedia"
+    const marketReturnText =
+      Number.isFinite(returnPercent)
+        ? `${returnPercent.toFixed(2)}%`
+        : "data tidak tersedia"
 
     const marketSummary =
-      `${symbol} pada timeframe ${timeframe} terakhir berada pada harga ${market.close}. ` +
-      `Perubahan candle terakhir tercatat ${marketReturnText}.`
+      `${symbol} pada timeframe ${timeframe} terakhir berada pada harga ` +
+      `${feature.close}. Perubahan candle terakhir tercatat ` +
+      `${marketReturnText}.`
 
     const technicalSummary =
-      `RSI14 ${rsi.toFixed(2)}, MACD ${macd.toFixed(2)}, ` +
-      `MACD Signal ${macdSignal.toFixed(2)}, dan Momentum14 ${momentum.toFixed(2)}.`
+      `RSI14 ${feature.rsi14?.toFixed(2) ?? "N/A"}, ` +
+      `MACD ${feature.macd?.toFixed(2) ?? "N/A"}, ` +
+      `MACD Signal ${feature.macdSignal?.toFixed(2) ?? "N/A"}, ` +
+      `dan Momentum14 ${feature.momentum14?.toFixed(2) ?? "N/A"}.`
 
-    const modelSummary =
-      `Model ${prediction.model} menghasilkan prediksi ${prediction.prediction} ` +
-      `dengan probabilitas DOWN ${(Number(prediction.probabilities.DOWN) * 100).toFixed(2)}%, ` +
-      `NEUTRAL ${(Number(prediction.probabilities.NEUTRAL) * 100).toFixed(2)}%, ` +
-      `dan UP ${(Number(prediction.probabilities.UP) * 100).toFixed(2)}%.`
-
-    const uncertainty =
-      probabilityGap < 0.10
-        ? "Sinyal model masih lemah karena probabilitas antar kelas relatif berdekatan."
-        : "Sinyal model memiliki pemisahan probabilitas yang lebih terlihat."
-
-    const analystConclusion =
-      `Data teknikal menunjukkan kondisi yang perlu dipantau, sementara model ML saat ini menghasilkan sinyal ${prediction.prediction}. ` +
-      `Hasil ini merupakan interpretasi data dan output model, bukan kepastian arah harga berikutnya.`
+    const predictionSummary =
+      `Model ${prediction.model} menghasilkan klasifikasi ` +
+      `${direction} dengan probabilitas ` +
+      `${(
+        probabilities[direction] * 100
+      ).toFixed(2)}%.`
 
     return NextResponse.json({
       success: true,
-      version: "v5.2-demo",
-      source: "marketx-demo-analyst",
-      liveAI: false,
-      providerStatus: "openai-credit-required",
-      contextVersion: data.contextVersion,
-      symbol,
-      assetType,
-      timeframe,
-      horizon: Number(horizon),
+      mode: "DEMO_ANALYST",
+      source: "marketx-deterministic-analyst",
+      generatedAt: new Date().toISOString(),
 
-      market: {
-        close: market.close,
-        returnPercent: market.returnPercent,
-        timestamp: market.timestamp,
-      },
+      marketSummary,
+      technicalSummary,
+      predictionSummary,
 
-      prediction,
+      keyFactors: analyst.confluence,
+      riskFactors: analyst.riskFactors,
 
-      analysis: {
-        marketSummary,
-        technicalSummary,
-        modelSummary,
-        uncertainty,
-        keyFactors,
-        riskFactors,
-        analystConclusion,
+      uncertainty: analyst.uncertainty,
+
+      conclusion: analyst.summary,
+
+      analyst,
+
+      context: {
+        market,
+        technical,
+        prediction,
       },
     })
   } catch (error) {
@@ -195,11 +291,9 @@ export async function GET(request: Request) {
         error:
           error instanceof Error
             ? error.message
-            : "Unknown error",
+            : "Unknown analyst error",
       },
       { status: 500 }
     )
   }
 }
-
-
