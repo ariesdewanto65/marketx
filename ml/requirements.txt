@@ -1,6 +1,6 @@
-﻿numpy
+﻿fastapi[standard]
+uvicorn
+numpy
 pandas
 scikit-learn
 requests
-fastapi
-uvicorn
