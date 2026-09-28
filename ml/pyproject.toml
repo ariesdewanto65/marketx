@@ -1,0 +1,15 @@
+[project]
+name = "marketx-ml"
+version = "0.1.0"
+description = "MarketX ML prediction service"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi[standard]",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "requests"
+]
+
+[tool.fastapi]
+entrypoint = "main:app"

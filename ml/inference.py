@@ -1,4 +1,4 @@
-from price_regression_api import run_price_prediction
+from .price_regression_api import run_price_prediction
 import os
 
 import pandas as pd
@@ -353,3 +353,4 @@ def price_prediction(
             "success": False,
             "error": str(error),
         }
+

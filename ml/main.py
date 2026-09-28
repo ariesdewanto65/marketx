@@ -1,1 +1,4 @@
-﻿from .inference import app
+try:
+    from .inference import app
+except ImportError:
+    from inference import app
