@@ -1,4 +1,5 @@
-﻿import os
+from price_regression_api import run_price_prediction
+import os
 
 import pandas as pd
 import requests
@@ -310,3 +311,45 @@ def predict(
         "model": "random-forest-calibrated",
         "calibration": "sigmoid",
     }
+
+@app.get("/price-prediction")
+def price_prediction(
+    symbol: str,
+    assetType: str = "crypto",
+    timeframe: str = "4h",
+    horizon: int = 6,
+):
+    allowed_asset_types = {"stock", "crypto"}
+    allowed_timeframes = {"1d", "4h"}
+
+    if assetType not in allowed_asset_types:
+        return {
+            "success": False,
+            "error": f"Unsupported assetType: {assetType}",
+        }
+
+    if timeframe not in allowed_timeframes:
+        return {
+            "success": False,
+            "error": f"Unsupported timeframe: {timeframe}",
+        }
+
+    if horizon < 1 or horizon > 30:
+        return {
+            "success": False,
+            "error": "horizon must be between 1 and 30",
+        }
+
+    try:
+        return run_price_prediction(
+            symbol=symbol.upper(),
+            asset_type=assetType,
+            timeframe=timeframe,
+            horizon=horizon,
+        )
+
+    except Exception as error:
+        return {
+            "success": False,
+            "error": str(error),
+        }

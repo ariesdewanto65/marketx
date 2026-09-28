@@ -48,3 +48,5 @@ __pycache__/*.py[cod]
 
 __pycache__/
 *.py[cod]
+
+*.backup-*
