@@ -1,4 +1,7 @@
-from .price_regression_api import run_price_prediction
+try:
+    from .price_regression_api import run_price_prediction
+except ImportError:
+    from price_regression_api import run_price_prediction
 import os
 
 import pandas as pd
