@@ -47,6 +47,24 @@ type PredictionContext = {
   timestamp: string
 }
 
+
+type PricePredictionContext = {
+  currentClose: number
+  predictedReturnPercent: number
+  predictedClose: number
+  horizonCandles: number
+  horizonHours: number
+  model: string
+  configuration: {
+    nEstimators: number
+    maxDepth: number
+    minSamplesLeaf: number
+  }
+  training: {
+    featureRows: number
+    alignedRows: number
+  }
+}
 type AnalystContext = {
   marketState: string
   trendState: string
@@ -92,8 +110,21 @@ export default function InstrumentTerminalPage() {
   const [instrument, setInstrument] = useState<Instrument | null>(null)
   const [candles, setCandles] = useState<MarketCandle[]>([])
   const [technical, setTechnical] = useState<TechnicalContext | null>(null)
-  const [prediction, setPrediction] =
-    useState<PredictionContext | null>(null)
+  const [prediction, setPrediction] = useState<PredictionContext | null>(null)
+  const [pricePrediction, setPricePrediction] = useState<PricePredictionContext | null>(null)
+
+  const loadPricePrediction = async () => {
+    try {
+      const response = await fetch("/api/market/prediction/price?symbol=" + symbol + "&assetType=" + assetType + "&timeframe=" + timeframe + "&horizon=6");
+      if (!response.ok) return
+      const data = await response.json()
+      if (data.success && data.prediction) {
+        setPricePrediction(data.prediction)
+      }
+    } catch (error) {
+      console.error("Price prediction failed:", error)
+    }
+  }
   const [analyst, setAnalyst] = useState<AnalystContext | null>(null)
 
   const [loading, setLoading] = useState(true)
@@ -901,7 +932,7 @@ export default function InstrumentTerminalPage() {
                   {intelligenceError}
                 </div>
               ) : prediction ? (
-                <div className="mt-5 space-y-4">
+                <div className="mt-5">
                   <div className="rounded-xl bg-slate-950 p-4">
                     <div className="text-xs text-slate-600">
                       Prediction
@@ -967,6 +998,73 @@ export default function InstrumentTerminalPage() {
                       {prediction.calibration}
                     </div>
                   </div>
+
+                  {pricePrediction && (
+                    <div className="rounded-xl bg-slate-950 p-4">
+                      <div className="text-xs text-slate-600">
+                        Future Close Prediction
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div className="rounded-lg border border-slate-800 p-3">
+                          <div className="text-xs text-slate-500">
+                            Current Close
+                          </div>
+                          <div className="mt-1 text-lg font-semibold">
+                            {pricePrediction.currentClose.toLocaleString(
+                              undefined,
+                              { maximumFractionDigits: 2 },
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-800 p-3">
+                          <div className="text-xs text-slate-500">
+                            Predicted Close
+                          </div>
+                          <div className="mt-1 text-lg font-semibold">
+                            {pricePrediction.predictedClose.toLocaleString(
+                              undefined,
+                              { maximumFractionDigits: 2 },
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-800 p-3">
+                          <div className="text-xs text-slate-500">
+                            Expected Return
+                          </div>
+                          <div className="mt-1 text-lg font-semibold">
+                            {pricePrediction.predictedReturnPercent >= 0
+                              ? "+"
+                              : ""}
+                            {pricePrediction.predictedReturnPercent.toFixed(2)}%
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg border border-slate-800 p-3">
+                          <div className="text-xs text-slate-500">
+                            Horizon
+                          </div>
+                          <div className="mt-1 text-lg font-semibold">
+                            {pricePrediction.horizonCandles} candles
+                          </div>
+                          <div className="mt-1 text-xs text-slate-600">
+                            {pricePrediction.horizonHours}h
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 border-t border-slate-800 pt-3 text-xs text-slate-600">
+                        <div>
+                          Model: {pricePrediction.model}
+                        </div>
+                        <div className="mt-1">
+                          RF: {pricePrediction.configuration.nEstimators} trees - depth {pricePrediction.configuration.maxDepth} - leaf {pricePrediction.configuration.minSamplesLeaf}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="mt-5 rounded-xl bg-slate-950 p-4 text-xs text-slate-600">
@@ -1148,3 +1246,6 @@ export default function InstrumentTerminalPage() {
     </main>
   )
 }
+
+
+

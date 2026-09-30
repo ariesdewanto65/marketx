@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server"
-
 import {
   supabaseServer,
 } from "@/lib/supabase/server"
-
 import type {
   MarketTimeframe,
 } from "@/types/candle"
@@ -74,9 +72,7 @@ export async function GET(
     Number.isFinite(requestedLimit)
       ? Math.min(
           Math.max(
-            Math.floor(
-              requestedLimit
-            ),
+            Math.floor(requestedLimit),
             1
           ),
           1000
@@ -172,10 +168,11 @@ export async function GET(
           "timeframe",
           timeframe
         )
+        // Ambil candle terbaru terlebih dahulu
         .order(
           "timestamp",
           {
-            ascending: true,
+            ascending: false,
           }
         )
         .limit(limit)
@@ -198,25 +195,38 @@ export async function GET(
       )
     }
 
+    // Kembalikan ke urutan chronological:
+    // oldest → newest
+    const orderedData =
+      [...(data ?? [])].reverse()
+
     const candles =
-      (data ?? []).map(
+      orderedData.map(
         (row) => ({
           assetType:
             row.asset_type,
+
           symbol:
             row.symbol,
+
           timeframe:
             row.timeframe,
+
           timestamp:
             row.timestamp,
+
           open:
             Number(row.open),
+
           high:
             Number(row.high),
+
           low:
             Number(row.low),
+
           close:
             Number(row.close),
+
           volume:
             row.volume !== null
               ? Number(row.volume)
