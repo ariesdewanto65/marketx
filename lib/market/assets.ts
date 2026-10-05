@@ -41,3 +41,24 @@ export const CRYPTO_ASSETS: Asset[] = [
     type: "crypto",
   },
 ]
+
+export const FOREX_ASSETS: Asset[] = [
+  {
+    id: "forex:XAUUSD",
+    symbol: "XAU/USD",
+    name: "Gold / US Dollar",
+    type: "forex",
+  },
+  {
+    id: "forex:EURUSD",
+    symbol: "EUR/USD",
+    name: "Euro / US Dollar",
+    type: "forex",
+  },
+  {
+    id: "forex:GBPUSD",
+    symbol: "GBP/USD",
+    name: "British Pound / US Dollar",
+    type: "forex",
+  },
+]

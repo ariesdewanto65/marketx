@@ -1,10 +1,14 @@
-﻿import { NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import {
   AlphaVantageStockProvider,
 } from "@/lib/market/stocks"
 import {
   CoinGeckoCryptoProvider,
 } from "@/lib/market/crypto"
+import {
+  AlphaVantageForexProvider,
+} from "@/lib/market/forex"
+
 import {
   MarketService,
 } from "@/lib/market/service"
@@ -17,10 +21,13 @@ const stockProvider =
 const cryptoProvider =
   new CoinGeckoCryptoProvider()
 
+const forexProvider = new AlphaVantageForexProvider()
+
 const marketService =
   new MarketService(
     stockProvider,
-    cryptoProvider
+    cryptoProvider,
+    forexProvider
   )
 
 export async function GET(
@@ -58,8 +65,18 @@ export async function GET(
         return NextResponse.json(result)
       }
 
-      const result =
-        await marketService.getStockQuote(
+      if (assetType === "forex") {
+        const result = await marketService.getForexQuote(
+          symbol,
+          {
+            forceRefresh,
+          }
+        )
+
+        return NextResponse.json(result)
+      }
+
+      const result = await marketService.getStockQuote(
           symbol,
           {
             forceRefresh,

@@ -1,4 +1,4 @@
-export type AssetType = "stock" | "crypto"
+export type AssetType = "stock" | "crypto" | "forex"
 
 export interface Asset {
   id: string

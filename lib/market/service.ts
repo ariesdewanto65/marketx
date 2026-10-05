@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   AssetType,
   MarketSnapshot,
 } from "@/types/market"
@@ -8,6 +8,7 @@ import type { MarketProvider } from "@/lib/market/provider"
 import {
   MARKET_ASSETS,
   CRYPTO_ASSETS,
+  FOREX_ASSETS,
 } from "@/lib/market/assets"
 
 import {
@@ -36,7 +37,8 @@ export interface MarketQuoteResult {
 export class MarketService {
   constructor(
     private readonly stockProvider: MarketProvider,
-    private readonly cryptoProvider: MarketProvider
+    private readonly cryptoProvider: MarketProvider,
+    private readonly forexProvider: MarketProvider
   ) {}
 
   async getStockQuote(
@@ -63,6 +65,20 @@ export class MarketService {
       "crypto",
       symbol,
       this.cryptoProvider,
+      options
+    )
+  }
+
+  async getForexQuote(
+    symbol: string,
+    options?: {
+      forceRefresh?: boolean
+    }
+  ): Promise<MarketQuoteResult> {
+    return this.getQuote(
+      "forex",
+      symbol,
+      this.forexProvider,
       options
     )
   }
@@ -185,6 +201,19 @@ export class MarketService {
       results.push(result)
     }
 
+
+    for (const asset of FOREX_ASSETS) {
+      const result =
+        await this.getForexQuote(
+          asset.symbol,
+          {
+            forceRefresh,
+          }
+        )
+
+      results.push(result)
+    }
+
     return results
   }
 
@@ -194,7 +223,7 @@ export class MarketService {
   ): Promise<void> {
     const symbol =
       snapshot.assetId.replace(
-        /^(stock|crypto):/,
+        /^(stock|crypto|forex):/,
         ""
       )
 

@@ -347,7 +347,14 @@ export default function CandlestickChart({
 
     series.setData(data)
 
-    chartRef.current?.timeScale().fitContent()
+    if (data.length > 60) {
+      chartRef.current?.timeScale().setVisibleLogicalRange({
+        from: data.length - 60,
+        to: data.length + 2,
+      })
+    } else {
+      chartRef.current?.timeScale().fitContent()
+    }
   }, [candles])
 
   useEffect(() => {
