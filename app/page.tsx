@@ -1,9 +1,9 @@
-﻿"use client"
+"use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { authenticatedFetch } from "@/lib/supabase/auth-fetch"
 
-type AssetType = "stock" | "crypto"
+type AssetType = "stock" | "crypto" | "forex"
 
 type Asset = {
   id: string
@@ -76,9 +76,16 @@ const CRYPTO_ASSETS: Asset[] = [
   },
 ]
 
+const FOREX_ASSETS: Asset[] = [
+  { id: "forex:XAUUSD", symbol: "XAU/USD", name: "Gold / US Dollar", type: "forex" },
+  { id: "forex:EURUSD", symbol: "EUR/USD", name: "Euro / US Dollar", type: "forex" },
+  { id: "forex:GBPUSD", symbol: "GBP/USD", name: "British Pound / US Dollar", type: "forex" },
+]
+
 const ALL_ASSETS = [
   ...STOCK_ASSETS,
   ...CRYPTO_ASSETS,
+  ...FOREX_ASSETS,
 ]
 
 function formatPrice(
@@ -88,10 +95,7 @@ function formatPrice(
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits:
-      type === "crypto" && value >= 1000
-        ? 0
-        : 2,
+    maximumFractionDigits: type === "crypto" && value >= 1000 ? 0 : type === "forex" ? (value >= 1000 ? 2 : 5) : 2,
   }).format(value)
 }
 
@@ -99,7 +103,7 @@ function formatNumber(
   value: number | null
 ): string {
   if (value === null) {
-    return "—"
+    return "?"
   }
 
   return new Intl.NumberFormat("en-US", {
@@ -503,8 +507,8 @@ export default function Home() {
                           ? "+"
                           : ""
                       }${data.change.toFixed(2)}`
-                    : "—"
-                  : "—"}
+                    : "?"
+                  : "?"}
               </div>
             </div>
 
@@ -542,7 +546,7 @@ export default function Home() {
                   ? sourceLabel(
                       result.source
                     )
-                  : "—"}
+                  : "?"}
               </div>
             </div>
           </div>
@@ -659,6 +663,28 @@ export default function Home() {
         <section className="mt-12">
           <div className="mb-5">
             <h2 className="text-xl font-semibold">
+              Forex
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Foreign exchange and gold market data
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="rounded-2xl border border-zinc-800 p-8 text-sm text-zinc-500">
+              Loading forex market data...
+            </div>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {FOREX_ASSETS.map(
+                renderMarketCard
+              )}
+            </div>
+          )}
+        </section>
+        <section className="mt-12">
+          <div className="mb-5">
+            <h2 className="text-xl font-semibold">
               Watchlist
             </h2>
 
@@ -685,6 +711,9 @@ export default function Home() {
 
                 <option value="crypto">
                   Crypto
+                </option>
+                <option value="forex">
+                  Forex
                 </option>
               </select>
 
