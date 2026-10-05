@@ -174,8 +174,11 @@ export class AlphaVantageForexProvider implements MarketProvider {
       volume: null,
       marketCap: null,
       timestamp: data.timestamp
-        ? new Date(Number(data.timestamp) * 1000).toISOString()
-        : new Date().toISOString(),
-    }
+  ? Number.isFinite(Number(data.timestamp))
+    ? new Date(Number(data.timestamp) * 1000).toISOString()
+    : new Date(data.timestamp).toISOString()
+  : new Date().toISOString(),    }
   }
 }
+
+
